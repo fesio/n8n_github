@@ -1,0 +1,19 @@
+{
+  "id": "dryrun-1764857951",
+  "status": "success",
+  "startedAt": "2025-12-04T14:19:11.611054Z",
+  "stoppedAt": "2025-12-04T14:19:11.611054Z",
+  "duration": 0,
+  "data": [
+    {
+      "strategy": "mean_reversion",
+      "symbol": "BTC_USDT",
+      "score": 0.78
+    },
+    {
+      "strategy": "momentum",
+      "symbol": "ETH_USDT",
+      "score": 0.65
+    }
+  ]
+}
