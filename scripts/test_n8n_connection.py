@@ -8,6 +8,7 @@ import os
 import sys
 import logging
 from pathlib import Path
+from typing import Optional
 from dotenv import load_dotenv
 
 sys.path.insert(0, str(Path(__file__).parent))
