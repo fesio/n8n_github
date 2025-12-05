@@ -1,0 +1,29 @@
+{
+  "timestamp": "2025-12-05T11:19:32.772567Z",
+  "strategies": [
+    {
+      "name": "Mean Reversion",
+      "symbol": "BTC/USDT",
+      "timeframe": "1h",
+      "score": 0.82,
+      "signal": "BUY",
+      "confidence": 0.78
+    },
+    {
+      "name": "Momentum",
+      "symbol": "ETH/USDT",
+      "timeframe": "4h",
+      "score": 0.71,
+      "signal": "HOLD",
+      "confidence": 0.65
+    },
+    {
+      "name": "RSI Divergence",
+      "symbol": "XRP/USDT",
+      "timeframe": "1h",
+      "score": 0.68,
+      "signal": "SELL",
+      "confidence": 0.7
+    }
+  ]
+}

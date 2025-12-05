@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-n8n API Client - Integration with n8n workflows
-Handles authentication, workflow execution, and monitoring
+n8n API Client - Integration with n8n workflows via MCP gateway
+Direct access to n8n REST API through the MCP server endpoint
 """
 
 import os
@@ -9,10 +9,8 @@ import requests
 import json
 from typing import Dict, Any, Optional, List
 from dataclasses import dataclass
-from datetime import datetime
 import logging
 
-# Configure logging
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
@@ -22,278 +20,258 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class N8nConfig:
-    """Configuration for n8n API connection"""
+    """Configuration for n8n MCP integration"""
     base_url: str
-    api_key: str
-    api_version: str = "v1"
+    access_token: str
     timeout: int = 30
     verify_ssl: bool = True
 
     @classmethod
     def from_env(cls) -> 'N8nConfig':
         """Load configuration from environment variables"""
-        base_url = os.getenv('N8N_BASE_URL', 'http://localhost:5678')
-        api_key = os.getenv('N8N_API_KEY', '')
-        api_version = os.getenv('N8N_API_VERSION', 'v1')
+        # MCP endpoint is the base URL
+        base_url = os.getenv('N8N_MCP_URL', 'https://fesu.app.n8n.cloud/mcp-server/http')
+        access_token = os.getenv('N8N_ACCESS_TOKEN', '')
         timeout = int(os.getenv('N8N_TIMEOUT', '30'))
         verify_ssl = os.getenv('N8N_VERIFY_SSL', 'true').lower() == 'true'
 
+        if not access_token:
+            raise ValueError("N8N_ACCESS_TOKEN environment variable not set")
+
         return cls(
-            base_url=base_url,
-            api_key=api_key,
-            api_version=api_version,
+            base_url=base_url.rstrip('/'),
+            access_token=access_token,
             timeout=timeout,
             verify_ssl=verify_ssl
         )
 
 
 class N8nAPIClient:
-    """
-    n8n API Client for workflow management and execution
-    Supports: listing workflows, executing workflows, monitoring executions
-    """
+    """n8n REST API client via MCP gateway"""
 
     def __init__(self, config: N8nConfig):
-        """
-        Initialize n8n API client
-
+        """Initialize MCP client
+        
         Args:
-            config: N8nConfig object with connection details
+            config: N8nConfig instance
         """
         self.config = config
-        self.base_url = config.base_url.rstrip('/')
+        self.base_url = config.base_url
         self.session = requests.Session()
-        self.session.headers.update(self._get_headers())
-        logger.info(f"n8n API Client initialized: {self.base_url}/api/{config.api_version}")
-
-    def _get_headers(self) -> Dict[str, str]:
-        """Build request headers with authentication"""
-        headers = {
+        self.session.headers.update({
+            'Authorization': f'Bearer {config.access_token}',
             'Content-Type': 'application/json',
+            'Accept': 'application/json',
             'User-Agent': 'n8n-python-client/1.0'
-        }
-        if self.config.api_key:
-            headers['X-N8N-API-KEY'] = self.config.api_key
-        return headers
+        })
+        logger.info(f"n8n API Client initialized: {self.base_url}/api/v1")
 
     def _make_request(
         self,
         method: str,
         endpoint: str,
-        data: Optional[Dict[str, Any]] = None,
-        params: Optional[Dict[str, Any]] = None
+        json_data: Optional[Dict[str, Any]] = None,
+        params: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
-        """
-        Make HTTP request to n8n API
-
+        """Make MCP API request
+        
         Args:
-            method: HTTP method (GET, POST, PUT, DELETE)
+            method: HTTP method (GET, POST, etc.)
             endpoint: API endpoint (e.g., '/workflows')
-            data: Request body data
+            json_data: Request body
             params: Query parameters
-
+            
         Returns:
-            Response JSON as dictionary
+            Response JSON
+            
+        Raises:
+            requests.RequestException: If request fails
         """
-        url = f"{self.base_url}/api/{self.config.api_version}{endpoint}"
+        url = f"{self.base_url}/api/v1{endpoint}"
         
         try:
             logger.debug(f"{method} {url}")
             response = self.session.request(
                 method=method,
                 url=url,
-                json=data,
+                json=json_data,
                 params=params,
                 timeout=self.config.timeout,
-                verify=self.config.verify_ssl
+                verify=self.config.verify_ssl,
             )
+            
+            # Log response details for debugging
+            logger.debug(f"Response status: {response.status_code}")
+            logger.debug(f"Response type: {response.headers.get('content-type')}")
+            
             response.raise_for_status()
-            return response.json()
-        except requests.exceptions.RequestException as e:
+            
+            # Try to parse as JSON
+            try:
+                return response.json()
+            except json.JSONDecodeError:
+                logger.warning(f"Response is not JSON (type: {response.headers.get('content-type')})")
+                logger.warning(f"Response text: {response.text[:200]}")
+                raise ValueError(f"API returned non-JSON response: {response.headers.get('content-type')}")
+                
+        except requests.RequestException as e:
             logger.error(f"API request failed: {e}")
             raise
 
     def test_connection(self) -> bool:
-        """
-        Test API connection
-
+        """Test MCP connection
+        
         Returns:
             True if connection successful
         """
         try:
+            logger.info("Testing n8n MCP connection...")
             response = self._make_request('GET', '/me')
-            logger.info(f"✓ Connected to n8n as: {response.get('email', 'Unknown')}")
+            logger.info(f"✓ MCP connection successful")
+            return True
+        except ValueError as e:
+            # This is likely the HTML response issue - log for debugging
+            logger.warning(f"Connection returned non-JSON: {e}")
+            logger.info("⚠️  MCP endpoint may not expose JSON API directly")
+            logger.info("Attempting workaround: checking direct access...")
+            return self._check_direct_api_access()
+        except Exception as e:
+            logger.error(f"✗ MCP connection failed: {e}")
+            return False
+    
+    def _check_direct_api_access(self) -> bool:
+        """Check if we can access n8n REST API directly (bypass MCP)"""
+        try:
+            # Try direct access to n8n API
+            base_url = self.base_url.replace('/mcp-server/http', '')
+            url = f"{base_url}/api/v1/me"
+            logger.info(f"Trying direct API access: {url}")
+            
+            response = self.session.get(url, timeout=self.config.timeout, verify=self.config.verify_ssl)
+            response.raise_for_status()
+            
+            # Update base_url if direct access works
+            self.base_url = base_url
+            logger.info("✓ Direct API access successful!")
             return True
         except Exception as e:
-            logger.error(f"✗ Connection failed: {e}")
+            logger.error(f"Direct API access also failed: {e}")
             return False
 
     def list_workflows(self, limit: int = 100, offset: int = 0) -> List[Dict[str, Any]]:
-        """
-        List all workflows
-
+        """List workflows
+        
         Args:
-            limit: Maximum number of workflows to return
-            offset: Number of workflows to skip
-
+            limit: Max workflows to return
+            offset: Offset for pagination
+            
         Returns:
             List of workflow objects
         """
-        response = self._make_request(
-            'GET',
-            '/workflows',
-            params={'limit': limit, 'offset': offset}
-        )
-        workflows = response.get('data', [])
-        logger.info(f"Retrieved {len(workflows)} workflows")
-        return workflows
+        try:
+            logger.info("Listing workflows via MCP...")
+            response = self._make_request(
+                'GET',
+                '/workflows',
+                params={'limit': limit, 'offset': offset}
+            )
+            workflows = response.get('data', [])
+            logger.info(f"Retrieved {len(workflows)} workflows")
+            return workflows
+        except Exception as e:
+            logger.error(f"Failed to list workflows: {e}")
+            return []
 
     def get_workflow(self, workflow_id: str) -> Dict[str, Any]:
-        """
-        Get workflow details by ID
-
+        """Get workflow details
+        
         Args:
-            workflow_id: n8n workflow ID
-
+            workflow_id: Workflow ID
+            
         Returns:
-            Workflow object with full details
+            Workflow object
         """
-        workflow = self._make_request('GET', f'/workflows/{workflow_id}')
-        logger.info(f"Retrieved workflow: {workflow.get('name', workflow_id)}")
-        return workflow
+        try:
+            return self._make_request('GET', f'/workflows/{workflow_id}')
+        except Exception as e:
+            logger.error(f"Failed to get workflow: {e}")
+            return {}
 
     def execute_workflow(
         self,
         workflow_id: str,
-        data: Optional[Dict[str, Any]] = None
+        input_data: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
-        """
-        Execute a workflow
-
+        """Execute workflow via MCP
+        
         Args:
-            workflow_id: n8n workflow ID
-            data: Input data for the workflow
-
+            workflow_id: Workflow ID
+            input_data: Input data for workflow
+            
         Returns:
-            Execution result
+            Execution response
         """
-        payload = {
-            'data': data or {}
-        }
-        result = self._make_request('POST', f'/workflows/{workflow_id}/execute', data=payload)
-        logger.info(f"Workflow {workflow_id} executed, ID: {result.get('id', 'unknown')}")
-        return result
+        try:
+            logger.info(f"Executing workflow {workflow_id} via MCP...")
+            payload = {'data': input_data or {}}
+            response = self._make_request(
+                'POST',
+                f'/workflows/{workflow_id}/execute',
+                json_data=payload
+            )
+            logger.info(f"Workflow execution triggered")
+            return response
+        except Exception as e:
+            logger.error(f"Workflow execution failed: {e}")
+            raise
 
     def get_execution(self, execution_id: str) -> Dict[str, Any]:
-        """
-        Get execution details
-
-        Args:
-            execution_id: n8n execution ID
-
-        Returns:
-            Execution object with status and results
-        """
-        execution = self._make_request('GET', f'/executions/{execution_id}')
-        status = execution.get('status', 'unknown')
-        logger.info(f"Execution {execution_id}: {status}")
-        return execution
-
-    def list_executions(
-        self,
-        workflow_id: Optional[str] = None,
-        limit: int = 100,
-        offset: int = 0
-    ) -> List[Dict[str, Any]]:
-        """
-        List workflow executions
-
-        Args:
-            workflow_id: Filter by workflow ID (optional)
-            limit: Maximum number of executions to return
-            offset: Number of executions to skip
-
-        Returns:
-            List of execution objects
-        """
-        params = {'limit': limit, 'offset': offset}
-        if workflow_id:
-            endpoint = f'/executions?workflow_id={workflow_id}'
-        else:
-            endpoint = '/executions'
+        """Get execution details
         
-        response = self._make_request('GET', endpoint, params=params)
-        executions = response.get('data', [])
-        logger.info(f"Retrieved {len(executions)} executions")
-        return executions
-
-    def trigger_webhook(
-        self,
-        workflow_id: str,
-        node_name: str,
-        data: Optional[Dict[str, Any]] = None
-    ) -> Dict[str, Any]:
-        """
-        Trigger a webhook in a workflow
-
         Args:
-            workflow_id: n8n workflow ID
-            node_name: Webhook node name
-            data: Data to send to webhook
-
+            execution_id: Execution ID
+            
         Returns:
-            Webhook response
+            Execution object
         """
-        url = f"{self.base_url}/webhook/{workflow_id}/{node_name}"
         try:
-            response = requests.post(
-                url,
-                json=data or {},
-                timeout=self.config.timeout,
-                verify=self.config.verify_ssl
-            )
-            response.raise_for_status()
-            logger.info(f"Webhook triggered: {workflow_id}/{node_name}")
-            return response.json()
-        except requests.exceptions.RequestException as e:
-            logger.error(f"Webhook trigger failed: {e}")
-            raise
+            return self._make_request('GET', f'/executions/{execution_id}')
+        except Exception as e:
+            logger.error(f"Failed to get execution: {e}")
+            return {}
 
     def wait_for_execution(
         self,
         execution_id: str,
-        max_wait_seconds: int = 300,
+        timeout: int = 300,
         poll_interval: int = 2
     ) -> Dict[str, Any]:
-        """
-        Wait for execution to complete
-
+        """Wait for execution to complete
+        
         Args:
-            execution_id: n8n execution ID
-            max_wait_seconds: Maximum seconds to wait
-            poll_interval: Seconds between status checks
-
+            execution_id: Execution ID
+            timeout: Max seconds to wait
+            poll_interval: Seconds between checks
+            
         Returns:
             Final execution object
         """
         import time
-        start_time = datetime.now()
+        start_time = time.time()
         
-        while True:
+        while time.time() - start_time < timeout:
             execution = self.get_execution(execution_id)
             status = execution.get('status')
             
             if status in ['success', 'error', 'crashed']:
-                logger.info(f"Execution complete: {status}")
-                return execution
-            
-            elapsed = (datetime.now() - start_time).total_seconds()
-            if elapsed > max_wait_seconds:
-                logger.warning(f"Execution timeout after {elapsed}s")
+                logger.info(f"Execution {execution_id} completed: {status}")
                 return execution
             
             logger.debug(f"Execution status: {status}, waiting...")
             time.sleep(poll_interval)
+        
+        logger.warning(f"Execution timeout after {timeout}s")
+        return execution
 
 
 def main():
@@ -306,18 +284,15 @@ def main():
     
     # Test connection
     if not client.test_connection():
-        logger.error("Failed to connect to n8n API")
+        logger.error("Failed to connect to n8n MCP")
         return
     
     # List workflows
     try:
-        workflows = client.list_workflows()
-        if workflows:
-            print("\n📋 Available Workflows:")
-            for wf in workflows[:5]:  # Show first 5
-                print(f"  - {wf.get('name')} (ID: {wf.get('id')})")
-        else:
-            print("No workflows found")
+        workflows = client.list_workflows(limit=5)
+        logger.info(f"Found {len(workflows)} workflows")
+        for wf in workflows[:3]:
+            logger.info(f"  - {wf.get('name')} (ID: {wf.get('id')})")
     except Exception as e:
         logger.error(f"Error listing workflows: {e}")
 

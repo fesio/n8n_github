@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Execute Trading Workflows via n8n API
+Execute Trading Workflows via n8n Webhook
 Handles: CSV input, workflow execution, result processing and saving
 """
 
@@ -16,8 +16,7 @@ from dotenv import load_dotenv
 
 sys.path.insert(0, str(Path(__file__).parent))
 
-from n8n_integration import N8nIntegration
-from n8n_api_client import N8nConfig
+from n8n_api_client import N8nConfig, N8nAPIClient
 
 logging.basicConfig(
     level=logging.INFO,
@@ -27,7 +26,7 @@ logger = logging.getLogger(__name__)
 
 
 class TradingWorkflowExecutor:
-    """Execute trading workflows and manage results"""
+    """Execute trading workflows via webhook and manage results"""
 
     def __init__(self, data_dir: str = "data", reports_dir: str = "reports"):
         """
@@ -39,7 +38,14 @@ class TradingWorkflowExecutor:
         """
         self.data_dir = Path(data_dir)
         self.reports_dir = Path(reports_dir)
-        self.integration = N8nIntegration()
+        
+        # Initialize webhook client
+        try:
+            config = N8nConfig.from_env()
+            self.client = N8nAPIClient(config)
+        except ValueError as e:
+            logger.error(f"Failed to initialize n8n client: {e}")
+            self.client = None
         
         # Create directories if they don't exist
         self.data_dir.mkdir(exist_ok=True)
@@ -50,12 +56,10 @@ class TradingWorkflowExecutor:
         logger.info(f"  Reports dir: {self.reports_dir}")
 
     def connect(self) -> bool:
-        """Connect to n8n"""
-        return self.integration.connect()
-
-    def list_available_workflows(self):
-        """List and display available workflows"""
-        self.integration.print_workflows_table()
+        """Connect to n8n webhook"""
+        if not self.client:
+            return False
+        return self.client.test_connection()
 
     def find_input_csv(self, pattern: Optional[str] = None) -> Optional[Path]:
         """
@@ -116,7 +120,7 @@ class TradingWorkflowExecutor:
         wait: bool = True
     ) -> Optional[Dict[str, Any]]:
         """
-        Execute trading workflow
+        Execute trading workflow via n8n MCP API
 
         Args:
             workflow_name_or_id: Name or ID of workflow to execute
@@ -126,8 +130,19 @@ class TradingWorkflowExecutor:
         Returns:
             Execution result
         """
-        # Find workflow
-        workflow = self.integration.find_workflow(workflow_name_or_id)
+        if not self.client:
+            logger.error("Client not initialized")
+            return None
+        
+        # Find workflow by name or ID
+        workflows = self.client.list_workflows()
+        workflow = None
+        
+        for wf in workflows:
+            if wf.get('id') == workflow_name_or_id or wf.get('name') == workflow_name_or_id:
+                workflow = wf
+                break
+        
         if not workflow:
             logger.error(f"Workflow '{workflow_name_or_id}' not found")
             return None
@@ -146,21 +161,25 @@ class TradingWorkflowExecutor:
                 input_data['filename'] = input_csv.name
                 logger.info(f"Attached CSV data: {len(csv_data)} rows")
         
-        # Execute
+        # Execute workflow
         logger.info(f"Executing workflow...")
-        execution = self.integration.execute(
-            workflow_id,
-            input_data=input_data,
-            wait=wait,
-            max_wait=300
-        )
-        
-        if execution:
-            execution_id = execution.get('id')
-            status = execution.get('status')
-            logger.info(f"✅ Execution {execution_id}: {status}")
-        
-        return execution
+        try:
+            response = self.client.execute_workflow(workflow_id, input_data)
+            execution_id = response.get('id')
+            logger.info(f"✅ Execution triggered: {execution_id}")
+            
+            # Wait for completion if requested
+            if wait:
+                logger.info(f"Waiting for execution...")
+                execution = self.client.wait_for_execution(execution_id, timeout=300)
+                status = execution.get('status')
+                logger.info(f"Execution completed: {status}")
+                return execution
+            
+            return response
+        except Exception as e:
+            logger.error(f"Workflow execution failed: {e}")
+            return None
 
     def save_execution_result(
         self,

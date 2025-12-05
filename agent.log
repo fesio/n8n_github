@@ -1,0 +1,20 @@
+2025-12-04 14:22:57,690 - n8n_api_client - INFO - n8n API Client initialized: http://localhost:5678/api/v1
+2025-12-04 14:22:57,690 - n8n_integration - INFO - N8nIntegration initialized
+2025-12-04 14:22:57,691 - execute_trading_workflow - INFO - TradingWorkflowExecutor initialized
+2025-12-04 14:22:57,691 - execute_trading_workflow - INFO -   Data dir: data
+2025-12-04 14:22:57,691 - execute_trading_workflow - INFO -   Reports dir: reports
+2025-12-04 14:22:57,691 - __main__ - INFO - DRY_RUN enabled — skipping n8n connection
+2025-12-04 14:22:57,691 - __main__ - INFO - Starting Strategy Agent: workflow=StrategyGenerator, interval=3600s
+2025-12-04 14:22:57,691 - __main__ - INFO - Agent run: triggering workflow 'StrategyGenerator'
+2025-12-04 14:22:57,691 - __main__ - INFO - DRY_RUN enabled — generating fake execution result
+/workspaces/n8n_github/scripts/strategy_agent.py:61: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  timestamp = datetime.utcnow().isoformat() + 'Z'
+/workspaces/n8n_github/scripts/strategy_agent.py:82: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  timestamp = datetime.utcnow().strftime('%Y%m%d_%H%M%S')
+2025-12-04 14:22:57,692 - execute_trading_workflow - INFO - Execution result saved: reports/strategy_execution_20251204_142257.json
+2025-12-04 14:22:57,692 - __main__ - INFO - Saved execution result to reports/strategy_execution_20251204_142257.json
+2025-12-04 14:22:57,692 - notify - INFO - notify_slack: no webhook configured; skipping (would send): Strategy passed threshold: mean_reversion for BTC_USDT — score=0.78 (threshold=0.75)
+2025-12-04 14:22:57,692 - notify - INFO - notify_email: no recipient configured; skipping (would send): Strategy Alert: mean_reversion - Strategy passed threshold: mean_reversion for BTC_USDT — score=0.78 (threshold=0.75)
+2025-12-04 14:22:57,692 - __main__ - INFO - Notification sent for strategy mean_reversion (score=0.78)
+2025-12-04 14:23:00,559 - __main__ - INFO - Received signal 15; stopping agent gracefully...
+2025-12-04 14:23:00,692 - __main__ - INFO - Agent stopped
