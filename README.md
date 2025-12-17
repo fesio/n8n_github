@@ -271,6 +271,7 @@ N8N_MAX_WAIT_SECONDS=600
 - [n8n API Reference](https://docs.n8n.io/api/api-reference/)
 - [Trading Strategy Guide](./n8n_github_guide.md)
 - [Quick Start (60 min)](./quickstart_60min.md)
+- [Autonomous Agent Orchestrator workflow (JSON do importu)](./n8n/workflows/workflow_02_autonomous_agent_orchestrator.md)
 
 ## 📄 License
 
@@ -282,4 +283,3 @@ MIT
 2. Make changes
 3. Test with `python scripts/test_n8n_connection.py`
 4. Submit a pull request
-
