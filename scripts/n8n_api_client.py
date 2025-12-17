@@ -226,25 +226,39 @@ class N8nAPIClient:
             raise
 
     def get_execution(self, execution_id: str) -> Dict[str, Any]:
-        """Get execution details
-        
-        Args:
-            execution_id: Execution ID
-            
-        Returns:
-            Execution object
-        """
+        """Get execution details"""
         try:
             return self._make_request('GET', f'/executions/{execution_id}')
         except Exception as e:
             logger.error(f"Failed to get execution: {e}")
             return {}
 
+    def list_executions(
+        self,
+        workflow_id: Optional[str] = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> List[Dict[str, Any]]:
+        """List recent workflow executions"""
+
+        params: Dict[str, Any] = {"limit": limit, "offset": offset}
+        if workflow_id:
+            params["workflowId"] = workflow_id
+
+        try:
+            logger.info("Listing executions via MCP...")
+            response = self._make_request("GET", "/executions", params=params)
+            return response.get("data", [])
+        except Exception as e:
+            logger.error(f"Failed to list executions: {e}")
+            return []
+
     def wait_for_execution(
         self,
         execution_id: str,
-        timeout: int = 300,
-        poll_interval: int = 2
+        timeout: Optional[int] = None,
+        poll_interval: int = 2,
+        max_wait_seconds: Optional[int] = None,
     ) -> Dict[str, Any]:
         """Wait for execution to complete
         
@@ -257,9 +271,10 @@ class N8nAPIClient:
             Final execution object
         """
         import time
+        max_wait = timeout if timeout is not None else max_wait_seconds or 300
         start_time = time.time()
-        
-        while time.time() - start_time < timeout:
+
+        while time.time() - start_time < max_wait:
             execution = self.get_execution(execution_id)
             status = execution.get('status')
             
@@ -269,8 +284,8 @@ class N8nAPIClient:
             
             logger.debug(f"Execution status: {status}, waiting...")
             time.sleep(poll_interval)
-        
-        logger.warning(f"Execution timeout after {timeout}s")
+
+        logger.warning(f"Execution timeout after {max_wait}s")
         return execution
 
 
