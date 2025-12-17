@@ -1,6 +1,8 @@
-# 🤖 N8N WORKFLOW #2 - AUTONOMIC AGENT ORCHESTRATOR
+# 🤖 N8N WORKFLOW #2 - AUTONOMOUS AGENT ORCHESTRATOR
 
 ## Workflow_02_AutonomousAgentOrchestrator — JSON gotowy do importu
+
+_English summary: ready-to-import orchestrator that spawns specialist sub-agents, validates outputs, and posts a Slack summary with hallucination guard._
 
 Poniższy workflow tworzy **menedżera-agenta**, który:
 - przyjmuje zadanie (goal) przez webhook,
@@ -53,7 +55,7 @@ Skopiuj cały JSON i wklej w n8n → "Import from JSON".
     },
     {
       "parameters": {
-        "jsCode": "const raw = $json.data?.choices?.[0]?.message?.content || $json.text || $json.plan || $json.body || '';\nlet parsed = {};\ntry { parsed = typeof raw === 'string' ? JSON.parse(raw) : raw; } catch (e) { parsed = {}; }\nconst goal = parsed.goal || $json.goal || $json.body?.goal || 'unspecified goal';\nconst tasks = Array.isArray(parsed.tasks) && parsed.tasks.length ? parsed.tasks : [\n  {\n    role: 'Researcher',\n    specialization: 'market-data',\n    instructions: `Collect only verifiable facts for goal: ${goal}. Return bullet list with sources.`\n  },\n  {\n    role: 'Verifier',\n    specialization: 'fact-check',\n    instructions: `Cross-check claims for goal: ${goal}. Flag hallucinations and require evidence.`\n  }\n];\nreturn tasks.map(task => ({ json: { goal, ...task } }));"
+        "jsCode": "const raw = $json.data?.choices?.[0]?.message?.content || $json.text || $json.plan || '';\nlet parsed = {};\ntry {\n  parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;\n} catch (e) {\n  parsed = {};\n}\nconst goal = parsed.goal || $json.goal || $json.body?.goal || 'unspecified goal';\nconst tasks = Array.isArray(parsed.tasks) && parsed.tasks.length ? parsed.tasks : [\n  {\n    role: 'Researcher',\n    specialization: 'market-data',\n    instructions: `Collect only verifiable facts for goal: ${goal}. Return bullet list with sources.`\n  },\n  {\n    role: 'Verifier',\n    specialization: 'fact-check',\n    instructions: `Cross-check claims for goal: ${goal}. Flag hallucinations and require evidence.`\n  }\n];\nreturn tasks.map(task => ({ json: { goal, ...task } }));"
       },
       "id": "uuid-code-1",
       "name": "Code - Build Specialist Tasks",
@@ -87,7 +89,7 @@ Skopiuj cały JSON i wklej w n8n → "Import from JSON".
     },
     {
       "parameters": {
-        "jsCode": "const combined = items.map(item => ({\n  role: item.json.role,\n  specialization: item.json.specialization,\n  answer: item.json.answer || item.json.text || item.json.data || item.json,\n  sources: item.json.sources || []\n}));\nreturn [{ json: { combined } }];"
+        "jsCode": "const combined = items.map(item => ({\n  role: item.json.role,\n  specialization: item.json.specialization,\n  answer: item.json.answer || item.json.text || item.json.data?.text || item.json.data?.choices?.[0]?.message?.content || '',\n  sources: item.json.sources || []\n}));\nreturn [{ json: { combined } }];"
       },
       "id": "uuid-aggregate-1",
       "name": "Code - Combine Agents",
@@ -121,8 +123,8 @@ Skopiuj cały JSON i wklej w n8n → "Import from JSON".
     },
     {
       "parameters": {
-        "channel": "#strategy-dev",
-        "text": "=🤖 Agent summary for '{{ $json.body?.goal || $json.goal || \"task\" }}'\n\n{{$json.text || $json.data?.choices?.[0]?.message?.content}}\n\nSources pinned above. If something is missing, manager should refine inputs."
+        "channel": "#your-slack-channel",
+        "text": "={{'🤖 Agent summary for ' + ($json.body?.goal || $json.goal || \"task\") + \"\\n\\n\" + ($json.text || $json.data?.choices?.[0]?.message?.content || '') + \"\\n\\nSources pinned above. If something is missing, manager should refine inputs.'}}"
       },
       "id": "uuid-slack-1",
       "name": "Slack - Final Notify",
@@ -210,6 +212,43 @@ Skopiuj cały JSON i wklej w n8n → "Import from JSON".
 }
 ```
 
+### Czytelna wersja kodu (jsCode)
+```javascript
+// Code - Build Specialist Tasks
+const raw = $json.data?.choices?.[0]?.message?.content || $json.text || $json.plan || '';
+let parsed = {};
+try {
+  parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+} catch (e) {
+  parsed = {};
+}
+const goal = parsed.goal || $json.goal || $json.body?.goal || 'unspecified goal';
+const tasks = Array.isArray(parsed.tasks) && parsed.tasks.length ? parsed.tasks : [
+  {
+    role: 'Researcher',
+    specialization: 'market-data',
+    instructions: `Collect only verifiable facts for goal: ${goal}. Return bullet list with sources.`
+  },
+  {
+    role: 'Verifier',
+    specialization: 'fact-check',
+    instructions: `Cross-check claims for goal: ${goal}. Flag hallucinations and require evidence.`
+  }
+];
+return tasks.map(task => ({ json: { goal, ...task } }));
+```
+
+```javascript
+// Code - Combine Agents
+const combined = items.map(item => ({
+  role: item.json.role,
+  specialization: item.json.specialization,
+  answer: item.json.answer || item.json.text || item.json.data?.text || item.json.data?.choices?.[0]?.message?.content || '',
+  sources: item.json.sources || []
+}));
+return [{ json: { combined } }];
+```
+
 ---
 
 ## Jak zaimportować
@@ -218,6 +257,7 @@ Skopiuj cały JSON i wklej w n8n → "Import from JSON".
 3. Podmień credentials:
    - `openai-credentials-id` → Twoje OpenAI (lub Azure OpenAI) w n8n.
    - `slack-credentials-id` → Twoje połączenie Slack.
+   - `#your-slack-channel` → Kanał Slack, na który mają trafiać podsumowania.
 4. (Opcjonalnie) zmień ścieżkę webhooka `agent-manager` lub dodaj auth header.
 5. Aktywuj workflow i wyślij `POST` z payloadem:
    ```json
