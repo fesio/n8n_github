@@ -61,6 +61,30 @@ class TradingWorkflowExecutor:
             return False
         return self.client.test_connection()
 
+    def list_available_workflows(self) -> List[Dict[str, Any]]:
+        """List available workflows and print a short summary"""
+
+        if not self.client:
+            logger.error("Client not initialized; cannot list workflows")
+            return []
+
+        workflows = self.client.list_workflows()
+        if not workflows:
+            logger.warning("No workflows found")
+            return []
+
+        print("\nAvailable workflows (first 10):")
+        for wf in workflows[:10]:
+            name = wf.get("name", "<unnamed>")
+            wf_id = wf.get("id", "<no-id>")
+            active_flag = "✓" if wf.get("active") else "✗"
+            print(f"  - {name} (ID: {wf_id}, active: {active_flag})")
+
+        if len(workflows) > 10:
+            print(f"  ...and {len(workflows) - 10} more")
+
+        return workflows
+
     def find_input_csv(self, pattern: Optional[str] = None) -> Optional[Path]:
         """
         Find input CSV file
