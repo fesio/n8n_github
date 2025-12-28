@@ -11,23 +11,36 @@
 
 ---
 
-## ♻️ MAX AUTOMATYZACJA + SELF-HOST W PIGUŁCE
+## ♻️ Max automatyzacja + self-host w pigułce
 
 - **Automatyzacja all-in**
   - włącz Cron w n8n (03:00 / 06:00 / 09:00 – przykładowe godziny)
   - uruchom lokalnego agenta jako usługę (systemd/pm2), np.:
 
     ```bash
-    AGENT_INTERVAL=3600 python scripts/strategy_agent.py
+    AGENT_INTERVAL=3600 python scripts/strategy_agent.py          # Linux/macOS
+    # Windows (PowerShell): $env:AGENT_INTERVAL=3600; python scripts/strategy_agent.py
     ```
 
     gdzie `AGENT_INTERVAL=3600` oznacza interwał 1h
   - plik `strategy_agent.py` znajdziesz w `/scripts` (opisany w README, sekcja „🤖 Strategy Agent (Periodic)”)
 - **self-host (docker, 2 minuty)**
-  - `docker run -d --restart unless-stopped -p 5678:5678 -v n8n_storage:/home/node/.n8n --name n8n n8nio/n8n`
+  - uruchom:
+
+    ```bash
+    docker run -d --restart unless-stopped \
+      -p 5678:5678 \
+      -v n8n_storage:/home/node/.n8n \
+      --name n8n n8nio/n8n
+    ```
+
   - parametry: port 5678 = UI n8n, volume `/home/node/.n8n` = trwałe dane
   - po starcie: ustaw `N8N_BASE_URL` i `N8N_API_KEY` w `.env` (plik w katalogu głównym, kopia z `.env.example`; szczegóły w README sekcja „📖 Configuration”)
-- **Czy self-host jest nam potrzebny?** Tak, gdy: (1) chcesz dane trzymać on-prem, (2) potrzebujesz więcej mocy / niestandardowych węzłów, (3) chcesz niższe koszty przy dużej liczbie wywołań. W innym wypadku n8n.cloud wystarczy na start.
+- **Czy self-host jest nam potrzebny?**
+  - chcesz dane trzymać on-prem
+  - potrzebujesz więcej mocy / niestandardowych węzłów
+  - chcesz niższe koszty przy dużej liczbie wywołań
+  - w innym wypadku n8n.cloud wystarczy na start
 
 ---
 
