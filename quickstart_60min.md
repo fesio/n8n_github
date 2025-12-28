@@ -13,8 +13,8 @@
 
 ## ♻️ MAX AUTOMATYZACJA + SELF-HOST W PIGUŁCE
 
-- **Automatyzacja all-in** – włącz Cron w n8n (03:00 / 06:00 / 09:00) + uruchom lokalnego agenta `AGENT_INTERVAL=3600 python scripts/strategy_agent.py` jako usługę (systemd/pm2) aby pipeline działał nawet gdy dashboard jest wyłączony.
-- **self-host (docker, 2 minuty)**: `docker run -d --restart unless-stopped -p 5678:5678 -v n8n_storage:/home/node/.n8n --name n8n n8nio/n8n` → skonfiguruj URL + API token, podmień `N8N_BASE_URL` w `.env`.
+- **Automatyzacja all-in** – włącz Cron w n8n (03:00 / 06:00 / 09:00 – przykładowe godziny) + uruchom lokalnego agenta `AGENT_INTERVAL=3600 python scripts/strategy_agent.py` jako usługę (systemd/pm2), gdzie `AGENT_INTERVAL=3600` oznacza interwał 1h.
+- **self-host (docker, 2 minuty)**: `docker run -d --restart unless-stopped -p 5678:5678 -v n8n_storage:/home/node/.n8n --name n8n n8nio/n8n` (port 5678 = UI n8n, volume `/home/node/.n8n` = trwałe dane) → skonfiguruj URL + API token, podmień `N8N_BASE_URL` w `.env`.
 - **Czy self-host jest nam potrzebny?** Tak, gdy: (1) chcesz dane trzymać on-prem, (2) potrzebujesz więcej mocy / niestandardowych węzłów, (3) chcesz niższe koszty przy dużej liczbie wywołań. W innym wypadku n8n.cloud wystarczy na start.
 
 ---
