@@ -271,6 +271,7 @@ N8N_MAX_WAIT_SECONDS=600
 - [n8n API Reference](https://docs.n8n.io/api/api-reference/)
 - [Trading Strategy Guide](./n8n_github_guide.md)
 - [Quick Start (60 min)](./quickstart_60min.md)
+- [Lua Scripts (OTC/OTCv8 archived)](./scripts/lua/)
 
 ## 📄 License
 
